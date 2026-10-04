@@ -279,18 +279,22 @@
     <div id="loginView" class="login-wrap">
       <div class="lock">🔒</div>
       <h2>दुकानदार लॉगिन</h2>
-      <p>कृपया पासवर्ड टाका</p>
+      <p id="loginHint">कृपया पासवर्ड टाका</p>
+      <div class="field hidden" id="emailField">
+        <label for="email">ईमेल</label>
+        <input type="email" id="email" placeholder="admin@example.com" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
       <div class="field">
         <label for="pw">पासवर्ड</label>
         <input type="password" id="pw" placeholder="पासवर्ड" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
       <button class="btn-primary" onclick="doLogin()">लॉगिन करा</button>
       <div class="login-err" id="loginErr"></div>
-      <div style="margin-top:12px;font-size:14px;color:var(--muted)">डेमो पासवर्ड: <b>admin123</b></div>
+      <div id="demoPw" style="margin-top:12px;font-size:14px;color:var(--muted)">डेमो पासवर्ड: <b>admin123</b></div>
     </div>
 
     <div id="panelView" class="hidden">
-      <div class="admin-note">ℹ️ हा डेमो ब्राउझरच्या LocalStorage मध्ये डेटा साठवतो — बदल तुमच्या या ब्राउझरमध्ये कायम राहतील आणि लगेच ग्राहकांच्या पेजवर दिसतील.</div>
+      <div class="admin-note">ℹ️ बदल आता ऑनलाईन (Firebase) साठतात — सेव्ह करताच सर्व डिव्हाइसवर लगेच दिसतात.</div>
 
       <div class="stats">
         <div class="stat"><div class="num" id="stCat">0</div><div class="lbl">Categories</div></div>
@@ -338,6 +342,7 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
 /* ============================================================
@@ -352,9 +357,13 @@ const DEFAULT_PASSWORD = 'admin123';
    तुमच्या Firebase प्रोजेक्टचा databaseURL इथे आहे.
    रिकामा ठेवल्यास ॲप फक्त localStorage वापरेल (काही बिघडणार नाही). */
 const FIREBASE_CONFIG = {
+  apiKey: "",            // Firebase Auth साठी (ऐच्छिक) — उदा. "AIzaSy..."
+  authDomain: "",        // उदा. "sach-1ec67.firebaseapp.com"
   databaseURL: "https://sach-1ec67-default-rtdb.asia-southeast1.firebasedatabase.app/"
 };
 const FB_PATH = 'catalog';   // डेटा कुठे साठेल
+const AUTH_ENABLED = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.authDomain);
+let _fbAuth = null;
 
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function p(name, base, price, mrp, pack, img){
@@ -485,6 +494,7 @@ function initFirebase(){
   try{
     if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     _fbDb = firebase.database();
+    if(AUTH_ENABLED && firebase.auth) _fbAuth = firebase.auth();
     return _fbDb;
   }catch(e){ return null; }
 }
@@ -747,13 +757,37 @@ function renderAdminScreen(){
   if(isLoggedIn) renderAdmin();
 }
 function doLogin(){
-  const pw = document.getElementById('pw').value;
   const err = document.getElementById('loginErr');
-  if(pw === data.password){
-    isLoggedIn = true; err.textContent=''; document.getElementById('pw').value='';
-    renderAdminScreen(); toast('लॉगिन झाले ✅');
+  const pw = document.getElementById('pw').value;
+  if(AUTH_ENABLED && _fbAuth){
+    const email = (document.getElementById('email').value || '').trim();
+    if(!email){ err.textContent = 'कृपया ईमेल टाका.'; return; }
+    _fbAuth.signInWithEmailAndPassword(email, pw).then(()=>{
+      isLoggedIn = true; err.textContent=''; document.getElementById('pw').value='';
+      renderAdminScreen(); toast('लॉगिन झाले ✅');
+    }).catch(()=>{ err.textContent = 'चुकीचा ईमेल किंवा पासवर्ड.'; });
   }else{
-    err.textContent = 'चुकीचा पासवर्ड. पुन्हा प्रयत्न करा.';
+    if(pw === data.password){
+      isLoggedIn = true; err.textContent=''; document.getElementById('pw').value='';
+      renderAdminScreen(); toast('लॉगिन झाले ✅');
+    }else{
+      err.textContent = 'चुकीचा पासवर्ड. पुन्हा प्रयत्न करा.';
+    }
+  }
+}
+function renderLoginMode(){
+  const ef = document.getElementById('emailField');
+  const hint = document.getElementById('loginHint');
+  const demo = document.getElementById('demoPw');
+  if(!ef) return;
+  if(AUTH_ENABLED){
+    ef.classList.remove('hidden');
+    if(hint) hint.textContent = 'ईमेल व पासवर्ड टाका';
+    if(demo) demo.classList.add('hidden');
+  }else{
+    ef.classList.add('hidden');
+    if(hint) hint.textContent = 'कृपया पासवर्ड टाका';
+    if(demo) demo.classList.remove('hidden');
   }
 }
 function renderAdmin(){
@@ -947,6 +981,10 @@ document.getElementById('modal').addEventListener('click', e=>{ if(e.target.id==
 
 /* ---------- misc admin ---------- */
 function changePassword(){
+  if(AUTH_ENABLED){
+    toast('पासवर्ड बदलण्यासाठी Firebase Console वापरा (Authentication → Users)');
+    return;
+  }
   const np = prompt('नवीन पासवर्ड टाका:');
   if(np===null) return;
   if(np.trim().length<4){ toast('पासवर्ड कमीत कमी 4 अक्षरी असावा'); return; }
@@ -976,6 +1014,7 @@ renderProducts();
 renderCart();
 updateBadges();
 go('home');
+renderLoginMode();
 bootCloud();
 </script>
 </body>
