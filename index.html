@@ -290,7 +290,6 @@
       </div>
       <button class="btn-primary" onclick="doLogin()">लॉगिन करा</button>
       <div class="login-err" id="loginErr"></div>
-      <div id="demoPw" style="margin-top:12px;font-size:14px;color:var(--muted)">डेमो पासवर्ड: <b>admin123</b></div>
     </div>
 
     <div id="panelView" class="hidden">
@@ -351,7 +350,7 @@
 const STORAGE_KEY = 'medical_store_v1';
 const CART_KEY = 'medical_cart_v1';
 const CUSTOMER_KEY = 'medical_customer_v1';
-const DEFAULT_PASSWORD = 'admin123';
+const DEFAULT_PASSWORD = 'ArogyaMed@5820';
 
 /* ---------- Firebase Realtime Database ----------
    तुमच्या Firebase प्रोजेक्टचा databaseURL इथे आहे.
@@ -473,6 +472,7 @@ function normalizeData(parsed){
   // store contact number is managed here (kept in sync even if older data was saved)
   parsed.store.phone = DEFAULT_DATA.store.phone;
   parsed.store.whatsapp = DEFAULT_DATA.store.whatsapp;
+  if(parsed.password == null || parsed.password === 'admin123') parsed.password = DEFAULT_DATA.password;   // जुना डीफॉल्ट पासवर्ड बदलला
   return parsed;
 }
 function load(){
@@ -501,7 +501,7 @@ function initFirebase(){
 async function pushToCloud(){
   if(!_fbDb) return;
   try{
-    await _fbDb.ref(FB_PATH).set({ store:data.store, password:data.password, categories:data.categories });
+    await _fbDb.ref(FB_PATH).set({ store:data.store, categories:data.categories });
   }catch(e){ toast('ऑनलाईन सेव्ह झाले नाही — स्थानिक कॉपी जतन आहे'); }
 }
 function subscribeCloud(){
@@ -511,6 +511,7 @@ function subscribeCloud(){
     if(!v) return;
     const parsed = normalizeData(v);
     if(!parsed) return;
+    parsed.password = data.password;   // पासवर्ड क्लाउडमध्ये ठेवत नाही; स्थानिकच ठेवतो
     data = parsed;
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
     activeCat = data.categories[0] ? data.categories[0].id : null;
